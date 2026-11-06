@@ -157,8 +157,11 @@ const CRED=[1,.5,.25]; // fração dos pontos conforme a tentativa em que acerta
 const CFG={E:{n:8,p:8,t:"Fácil"},M:{n:8,p:10,t:"Intermédia"},H:{n:4,p:14,t:"Mais difícil"}};
 const app=document.getElementById("app");
 const sh=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-// Cola aqui o URL da aplicação web do Google Apps Script (termina em /exec). Vazio = sem envio automático.
-const ENVIO_URL="";
+// ENVIO AUTOMÁTICO PARA A FOLHA DE CÁLCULO DO PROFESSOR
+// Cola entre as aspas o URL da aplicação web do Google Apps Script (termina em /exec). Vazio = sem envio automático.
+const ENVIO_URL="https://script.google.com/macros/s/AKfycby46Lsp9Y5tpyYGv8PXxPvXYiROsiZHxNDchAtHkdq80vMkOZMQbn2dVBrpmpKdLXqk/exec";
+// Endereço de email do professor para o botão «Enviar ao professor». Vazio = o formando escreve o destinatário.
+const PROF_EMAIL="";
 let T=[],i=0,name="",nr="",tm="",P={};
 
 function home(){
@@ -183,7 +186,7 @@ const mencao=v=>v>=17.5?"Muito Bom":v>=13.5?"Bom":v>=9.5?"Suficiente":"Insuficie
 const pts=q=>q.ok?q.p*CRED[q.tries.length-1]:0;
 function gen(){
   T=[];
-  for(const l in CFG)sh(Q.filter(q=>q[0]==l)).slice(0,CFG[l].n).forEach(q=>T.push({l,aula:q[1],t:q[2],c:q[3],o:sh(q.slice(3,7)),x:q[7].split("§"),p:CFG[l].p,tries:[],ok:false,done:false}));
+  for(const l in CFG)sh(Q.filter(q=>q[0]==l)).slice(0,CFG[l].n).forEach(q=>T.push({k:Q.indexOf(q),l,aula:q[1],t:q[2],c:q[3],o:sh(q.slice(3,7)),x:q[7].split("§"),p:CFG[l].p,tries:[],ok:false,done:false}));
   i=0;show();
 }
 function show(){
@@ -222,13 +225,18 @@ function end(){
   <div class="mu" style="margin-top:8px">${fm(sc)} de ${tot} pontos · ${Math.round(sc/tot*100)}% · ${dt}</div>
   <div class="mu" style="font-size:.8rem;margin-top:6px">Escala: Insuficiente (0 a 9,4) · Suficiente (9,5 a 13,4) · Bom (13,5 a 17,4) · Muito Bom (17,5 a 20)</div>
   <button class="btn sec noprint" style="width:100%;margin-top:12px" id="pr">Guardar ou imprimir a classificação (PDF)</button></div>
-  <div class="card noprint"><div id="st" class="mu"></div><div class="nav" style="margin-top:10px"><button class="btn sec" id="rs">Reenviar</button><button class="btn sec" id="cp">Copiar resultado</button></div></div>
+  <div class="card noprint"><h2>Entregar ao professor</h2><p class="mu" style="margin-top:0">Escolhe uma das opções e envia a mensagem que se abre, sem a alterar.</p>
+  <button class="btn" style="width:100%;margin-bottom:10px" id="gc">Entregar no Google Classroom</button>
+  <button class="btn sec" style="width:100%;margin-bottom:10px" id="em">Enviar ao professor por email</button>
+  <button class="btn sec" style="width:100%;margin-bottom:10px" id="sh">Partilhar (WhatsApp, Teams, Mensagens…)</button>
+  <div id="st" class="mu"></div><div class="nav" style="margin-top:10px">${ENVIO_URL?'<button class="btn sec" id="rs">Reenviar</button>':''}<button class="btn sec" id="cp">Copiar resultado</button></div></div>
   <div class="card"><table><tr><th>Nível</th><th>Certas</th><th>Pontos</th></tr>${by}</table></div>
   <div class="card"><h2>Correção</h2>${T.map((q,n)=>`<div class="rv ${q.ok?"ok":"ko"}"><div class="mu">${n+1}. ${CFG[q.l].t} · Aula ${q.aula} · ${fm(pts(q))}/${fm(q.p)} pts</div><div>${q.t}</div>
   <div>Tentativas: ${q.tries.length?q.tries.map(k=>q.o[k]).join(" → "):"(sem resposta)"}</div><div>Resposta certa: <b class="ok">${q.c}</b></div></div>`).join("")}</div>
   <div class="noprint"><button class="btn" style="width:100%;margin-bottom:10px" id="nw">Gerar nova prova</button>
   <button class="btn sec" style="width:100%" id="hm">Início</button></div>`;
-  document.getElementById("rs").onclick=send;
+  if(document.getElementById("rs"))document.getElementById("rs").onclick=send;
+  document.getElementById("em").onclick=mail;document.getElementById("gc").onclick=classroom;document.getElementById("sh").onclick=partilha;
   document.getElementById("pr").onclick=()=>print();
   document.getElementById("cp").onclick=async()=>{
     const t=`P5 Probabilidade | ${P.nome} | Nº ${P.numero} | ${P.turma} | ${fm(P.valores)} valores (${P.mencao}) | ${P.nota}/${P.total} pontos | ${P.data} | ${P.id}\n${P.respostas}`;
@@ -239,16 +247,59 @@ function end(){
   document.getElementById("hm").onclick=()=>{home();scrollTo(0,0)};
   scrollTo(0,0);send();
 }
+/* ===== Comprovativo em ligação: tudo vai codificado no endereço, sem servidor ===== */
+const SAL="P5-ESMP-PIE-PMA";
+const hsh=t=>{let h=0x811c9dc5;for(const c of t){h^=c.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h.toString(36).toUpperCase().padStart(7,"0").slice(-6)};
+const b64e=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const b64d=t=>JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g,"+").replace(/_/g,"/")))));
+function comp(){
+  const d={n:P.nome,u:P.numero,t:P.turma,d:P.data,i:P.id,s:P.nota,o:P.total,v:P.valores,
+   q:T.map(q=>[q.k,q.l,q.aula,q.ok?q.tries.length:0,Math.round(pts(q)*10)/10,q.p])};
+  d.h=hsh(SAL+JSON.stringify(d));
+  return location.href.split("#")[0]+"#r="+b64e(d);
+}
+function verComp(code){
+  let d;try{d=b64d(code)}catch(e){app.innerHTML='<div class="card"><h2 class="ko">Comprovativo ilegível</h2><p class="mu">A ligação está incompleta ou foi alterada.</p></div>';return}
+  const h=d.h;delete d.h;const ok=hsh(SAL+JSON.stringify(d))===h&&Math.abs(d.q.reduce((a,x)=>a+x[4],0)-d.s)<.05;
+  app.innerHTML=`<div class="card" style="text-align:center"><span class="tag">Comprovativo da prova</span>
+  <h2 style="margin:10px 0 4px">${esc(d.n)}</h2><div class="mu">${esc(d.t)} · Nº ${esc(d.u)} · ${esc(d.d)}</div>
+  <div class="score" style="margin-top:10px">${fm(d.v)}<span class="mu" style="font-size:1.3rem"> valores</span></div><div class="mc">${mencao(d.v)}</div>
+  <div class="mu" style="margin-top:8px">${fm(d.s)} de ${d.o} pontos · código ${esc(d.i)}</div>
+  <p class="${ok?"ok":"ko"}" style="font-weight:700;margin:10px 0 0">${ok?"✔ Comprovativo íntegro (código "+h+")":"⚠ Atenção: os dados deste comprovativo foram alterados"}</p></div>
+  <div class="card"><table><tr><th>#</th><th>Nível · aula</th><th>Resultado</th><th>Pontos</th></tr>${d.q.map((x,n)=>`<tr><td>${n+1}</td><td>${CFG[x[1]]?CFG[x[1]].t:x[1]} · ${x[2]}</td><td>${x[3]?'<span class="ok">certa à '+x[3]+'.ª</span>':'<span class="ko">errada</span>'}</td><td>${fm(x[4])}/${fm(x[5])}</td></tr><tr><td></td><td colspan="3" class="mu" style="font-size:.82rem">${Q[x[0]]?esc(Q[x[0]][2]):""}</td></tr>`).join("")}</table></div>
+  <button class="btn sec noprint" style="width:100%" onclick="print()">Imprimir ou guardar em PDF</button>`;
+}
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function classroom(){
+  const u=comp(),st=document.getElementById("st");
+  try{await navigator.clipboard.writeText(u)}catch(e){}
+  if(navigator.share){try{await navigator.share({title:`Prova P5 – ${P.nome}`,text:`Prova P5 – ${P.nome} – ${fm(P.valores)} valores`,url:u});st.innerHTML='<b class="ok">Partilha aberta.</b> No Classroom, escolhe «Anexar ao trabalho», seleciona a Prova P5 e carrega em Entregar.';return}catch(e){}}
+  st.innerHTML='<b class="ok">Ligação do comprovativo copiada.</b> No Classroom, abre o trabalho «Prova P5», carrega em «Adicionar ou criar › Link», cola a ligação e carrega em <b>Entregar</b>.';
+  window.open("https://classroom.google.com/share?url="+encodeURIComponent(u),"_blank");
+}
+function resumo(){
+  return `Prova P5 – Probabilidade\nComprovativo: ${comp()}\nNome: ${P.nome}\nNº: ${P.numero}\nTurma: ${P.turma}\nData: ${P.data}\nClassificação: ${fm(P.valores)} valores (${P.mencao}) · ${fm(P.nota)}/${P.total} pontos\nCódigo da prova: ${P.id}\n\n`+
+  T.map((q,n)=>`${n+1}. ${CFG[q.l].t} · aula ${q.aula}: ${q.ok?"certa à "+q.tries.length+".ª":"errada"} (${fm(pts(q))}/${fm(q.p)})`).join("\n");
+}
+function mail(){
+  const su=`Prova P5 Probabilidade – ${P.nome} – Nº ${P.numero} – ${P.turma}`;
+  location.href=`mailto:${PROF_EMAIL}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(resumo())}`;
+}
+async function partilha(){
+  const st=document.getElementById("st");
+  if(navigator.share){try{await navigator.share({title:"Prova P5 – Probabilidade",text:resumo()});st.innerHTML='<b class="ok">Partilha aberta.</b> Confirma que a mensagem foi enviada ao professor.'}catch(e){}}
+  else mail();
+}
 async function send(){
   const st=document.getElementById("st");
-  if(!ENVIO_URL){st.textContent="Envio automático não configurado: usa «Copiar resultado» e entrega ao professor.";return}
-  st.textContent="A enviar…";
+  if(!ENVIO_URL){st.textContent="";return}
+  st.textContent="A enviar…";P.link=comp();
   try{
     await fetch(ENVIO_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(P)});
-    st.innerHTML='<b class="ok">Resultado enviado.</b> O browser não confirma a receção; se o professor não o vir, usa «Copiar resultado».';
+    st.innerHTML='<b class="ok">Resultado enviado automaticamente ao professor.</b> Não precisas de fazer mais nada. (Se o professor pedir, usa também «Entregar no Google Classroom».)';
   }catch(e){st.innerHTML='<b class="ko">Falha no envio.</b> Verifica a ligação e carrega em «Reenviar».'}
 }
-home();
+if(location.hash.startsWith("#r="))verComp(location.hash.slice(3));else home();
 </script>
 <footer>Escola Secundária Marquês de Pombal · Matemática · 12.º PIE-PMA · Módulo P5 – Probabilidade</footer>
 </body>
