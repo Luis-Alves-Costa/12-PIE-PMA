@@ -162,7 +162,7 @@ const sh=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.rand
 const ENVIO_URL="https://script.google.com/macros/s/AKfycby46Lsp9Y5tpyYGv8PXxPvXYiROsiZHxNDchAtHkdq80vMkOZMQbn2dVBrpmpKdLXqk/exec";
 // Endereço de email do professor para o botão «Enviar ao professor». Vazio = o formando escreve o destinatário.
 const PROF_EMAIL="";
-let T=[],i=0,name="",nr="",tm="",P={};
+let T=[],i=0,name="",nr="",tm="",em="",P={};
 
 function home(){
   const tot=Object.values(CFG).reduce((s,c)=>s+c.n*c.p,0);
@@ -172,10 +172,12 @@ function home(){
   <tr><th>Total</th><th>${Object.values(CFG).reduce((s,c)=>s+c.n,0)} perguntas</th><th>${tot} pontos</th></tr></table></div>
   <div class="card"><label for="nm">Nome *</label><input id="nm" autocomplete="name">
   <label for="nr">Nº *</label><input id="nr" inputmode="numeric"><label for="tm">Turma *</label><input id="tm">
+  <label for="em">Email da escola (o do Classroom) *</label><input id="em" type="email" inputmode="email" autocomplete="email" placeholder="nome@esmp.pt">
   <div class="ko" id="er"></div><button class="btn" style="width:100%" id="go">Gerar prova</button></div>`;
   document.getElementById("go").onclick=()=>{
-    const g=k=>document.getElementById(k).value.trim();name=g("nm");nr=g("nr");tm=g("tm");
-    if(!name||!nr||!tm){document.getElementById("er").textContent="Preenche o nome, o número e a turma.";return}
+    const g=k=>document.getElementById(k).value.trim();name=g("nm");nr=g("nr");tm=g("tm");em=g("em").toLowerCase();
+    if(!name||!nr||!tm||!em){document.getElementById("er").textContent="Preenche o nome, o número, a turma e o email da escola.";return}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){document.getElementById("er").textContent="O email não parece válido. Usa o email da escola com que entras no Classroom.";return}
     gen();
   };
 }
@@ -217,7 +219,7 @@ function end(){
   const sc=T.reduce((s,q)=>s+pts(q),0),tot=T.reduce((s,q)=>s+q.p,0);
   const by=Object.entries(CFG).map(([l,c])=>{const a=T.filter(q=>q.l==l);return `<tr><td>${c.t}</td><td>${a.filter(q=>q.ok).length}/${a.length}</td><td>${fm(a.reduce((s,q)=>s+pts(q),0))}/${a.length*c.p}</td></tr>`}).join("");
   const vl=val(sc,tot),mc=mencao(vl),dt=new Date().toLocaleString("pt-PT");
-  P={id:Date.now().toString(36),nome:name,numero:nr,turma:tm,nota:Math.round(sc*10)/10,total:tot,valores:vl,mencao:mc,data:dt,
+  P={id:Date.now().toString(36),nome:name,numero:nr,turma:tm,email:em,nota:Math.round(sc*10)/10,total:tot,valores:vl,mencao:mc,data:dt,
   respostas:T.map((q,n)=>`${n+1} [${q.l}, aula ${q.aula}] ${q.t} => ${q.tries.map(k=>q.o[k]).join(" | ")||"(sem resposta)"} ${q.ok?"OK à "+q.tries.length+".ª tentativa":"ERRADO (certa: "+q.c+")"}`).join("\n")};
   app.innerHTML=`<div class="card cls" style="text-align:center"><h2 style="margin:0 0 6px">A tua classificação</h2><div class="mu">${name} · ${tm} · Nº ${nr}</div>
   <div class="score" style="margin-top:10px">${fm(vl)}<span class="mu" style="font-size:1.3rem"> valores</span></div>
@@ -278,7 +280,7 @@ async function classroom(){
   window.open("https://classroom.google.com/share?url="+encodeURIComponent(u),"_blank");
 }
 function resumo(){
-  return `Prova P5 – Probabilidade\nComprovativo: ${comp()}\nNome: ${P.nome}\nNº: ${P.numero}\nTurma: ${P.turma}\nData: ${P.data}\nClassificação: ${fm(P.valores)} valores (${P.mencao}) · ${fm(P.nota)}/${P.total} pontos\nCódigo da prova: ${P.id}\n\n`+
+  return `Prova P5 – Probabilidade\nComprovativo: ${comp()}\nNome: ${P.nome}\nNº: ${P.numero}\nTurma: ${P.turma}\nEmail: ${P.email}\nData: ${P.data}\nClassificação: ${fm(P.valores)} valores (${P.mencao}) · ${fm(P.nota)}/${P.total} pontos\nCódigo da prova: ${P.id}\n\n`+
   T.map((q,n)=>`${n+1}. ${CFG[q.l].t} · aula ${q.aula}: ${q.ok?"certa à "+q.tries.length+".ª":"errada"} (${fm(pts(q))}/${fm(q.p)})`).join("\n");
 }
 function mail(){
