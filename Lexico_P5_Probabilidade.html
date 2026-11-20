@@ -328,6 +328,21 @@ html.mar #cViz{animation:surgir .9s ease both}
 #palco.petalasAbertas #nucleo:not(.origem){opacity:.55;transition:opacity .5s}
 #nucleo{transition:opacity .5s}
 html.mar .barra,html.mar #progresso,html.mar #dica,html.mar #linhaQ,html.mar #lg,html.mar #rodape{position:relative;z-index:10}
+/* glosas dos símbolos, a azul afável */
+.glosa{color:#2f6fc4;font-size:.84em;font-weight:400;margin:0 .15em;padding:0 .25em;border-radius:6px;background:rgba(90,150,230,.10);white-space:normal}
+@media (prefers-color-scheme:dark){.glosa{color:#9cc6ff;background:rgba(120,170,255,.14)}}
+.def.destaque .glosa{color:#3d7fd6}
+/* reforço: quando o aluno pede para repetir, a versão linguística predomina e cresce */
+#cartao .def,#cartao .ex,#cartao .vizcv{transition:font-size .6s ease,max-width .6s ease}
+#cartao[data-reforco="1"] .def{font-size:1.3rem;line-height:1.5}
+#cartao[data-reforco="1"] .ex{font-size:1.1rem}
+#cartao[data-reforco="1"] .vizcv{max-width:430px}
+#cartao[data-reforco="2"] .def{font-size:1.55rem;line-height:1.5;color:#0b3d91}
+#cartao[data-reforco="2"] .ex{font-size:1.25rem}
+#cartao[data-reforco="2"] .glosa{font-size:.9em}
+#cartao[data-reforco="2"] .vizcv{max-width:300px}
+#cartao.reforcou .def{animation:surgir .9s ease}
+.formula{unicode-bidi:isolate;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -3329,13 +3344,14 @@ function abrirPalavra(mi, ti, lg){
   const lgAntes = lingua; lingua = lg; cartaoAberto = true; realce = fase === 'lex' && mi === modAtual ? ti : -1;
   $('cChips').innerHTML = `<span class="chip" style="--c:${m.cor}">${m.id} · ${temaEm(mi, lg)}</span>${m.subs.length > 1 ? `<span class="chip" style="--c:${m.cor}">${m.id}.${t[2]} · ${m.subs[t[2]-1]}</span>` : ''}${anelDe(mi, ti)}`;
   $('cTermo').style.color = lg !== 'pt' && typeof COR_LG !== 'undefined' ? `color-mix(in srgb, ${COR_LG[lg]} 80%, #000)` : '';
-  $('cTermo').innerHTML = escH(t[0]) + (lg !== 'pt' ? `<small class="ptOrig">${tr('pt')}: <b>${escH(t0[0])}</b></small>` : ''); $('cDef').textContent = t[3]; $('cEx').textContent = t[4] ? tr('exemplo') + t[4] : '';
+  $('cTermo').innerHTML = escH(t[0]) + (lg !== 'pt' ? `<small class="ptOrig">${tr('pt')}: <b>${escH(t0[0])}</b></small>` : ''); $('cDef').innerHTML = glosar(escH(t[3]), lg); $('cEx').innerHTML = t[4] ? escH(tr('exemplo')) + glosar(escH(t[4]), lg) : '';
   $('cartao').lang = LANGS[lg].bcp; $('cOuvir').textContent = tr('ouvir'); $('cVoltar').textContent = tr('voltar');
   $('cDef').classList.toggle('destaque', !t[5]);
   $('cartao').dir = LANGS[lg].rtl ? 'rtl' : 'ltr';
-  if(t[5]){ montarViz($('cViz'), t[5]); const bt = $('cViz').querySelector('.repetir'); if(bt){ bt.textContent = tr('repetir'); bt.addEventListener('click', () => { if(leitura && leitura.ch === chaveT(mi, ti)) leitura.rep++; }); } } else { $('cViz').innerHTML = ''; pararViz(); }
+  if(t[5]){ montarViz($('cViz'), t[5]); const bt = $('cViz').querySelector('.repetir'); if(bt){ bt.textContent = tr('repetir'); bt.addEventListener('click', () => { if(leitura && leitura.ch === chaveT(mi, ti)) leitura.rep++; aplicarReforco(nivelReforco(mi, ti)); }); } } else { $('cViz').innerHTML = ''; pararViz(); }
   if(K.progresso && !K.prova && !K.percurso){ pendente = { mi, ti }; iniciarRelogio(); }
   if(K.percurso) iniciarLeitura(mi, ti, lg);
+  aplicarReforco(nivelReforco(mi, ti));
   // relacionadas: do mesmo submódulo, e a mesma palavra noutros módulos
   const rel = m.t.map((u,k) => ({ u, k })).filter(o => o.k !== ti && o.u[2] === t[2]).slice(0, 12);
   const outros = INDICE.filter(e => e.n === norm(t[0]) && e.mi !== mi);
@@ -3343,7 +3359,7 @@ function abrirPalavra(mi, ti, lg){
     + (outros.length ? `<h3 style="margin-top:10px">${tr('tambem')}</h3><div class="chips">` + outros.map(e => `<button class="chip" style="--c:${MODS[e.mi].cor}" data-m="${e.mi}" data-t="${e.ti}">${MODS[e.mi].id} · ${MODS[e.mi].curto}</button>`).join('') + '</div>' : '');
   $('cartao').classList.add('aberta'); $('cartao').scrollTop = 0;
   const textoLer = t[0] + '. ' + t[3] + (t[4] ? ' ' + tr('exemplo') + t[4] : '');
-  $('cOuvir').onclick = () => { if(K.percurso && typeof leituras !== 'undefined'){ const L = leituras[chaveT(mi, ti)]; if(L) L.ouv = (L.ouv || 0) + 1; } say(textoLer, null, true, lg); };
+  $('cOuvir').onclick = () => { if(K.percurso && typeof leituras !== 'undefined'){ const L = leituras[chaveT(mi, ti)]; if(L) L.ouv = (L.ouv || 0) + 1; aplicarReforco(nivelReforco(mi, ti)); } say(textoLer, null, true, lg); };
   lingua = lgAntes;
   say(textoLer, null, false, lg);
 }
@@ -3457,11 +3473,12 @@ function abrirPergunta(mi, ti){
   $('cChips').innerHTML = `<span class="chip" style="--c:${m.cor}">${m.id} · ${temaEm(mi, lg)}</span>${anelDe(mi, ti)}`;
   $('cTermo').innerHTML = escH(L[0]) + (lg !== 'pt' ? `<small class="ptOrig">${tr('pt')}: <b>${escH(t0[0])}</b></small>` : '');
   $('cartao').lang = LANGS[lg].bcp; $('cartao').dir = LANGS[lg].rtl ? 'rtl' : 'ltr';
+  $('cartao').dataset.reforco = 0;
   $('cDef').classList.remove('destaque'); $('cDef').textContent = tr('pEscolhe'); $('cEx').textContent = '';
   const ops = baralhar([{ txt:L[1], ok:true, d:-1 }, ...dis.map((x, k) => ({ txt:x, ok:false, d:k }))]);
   opcoesAtuais = { mi, ti, ch, ops };
   pararViz();
-  $('cViz').innerHTML = '<div class="opcoes">' + ops.map((o, i) => `<button data-i="${i}"><b>${'ABC'[i]}</b><span>${escH(o.txt)}</span></button>`).join('') + '</div><div id="retorno"></div>';
+  $('cViz').innerHTML = '<div class="opcoes">' + ops.map((o, i) => `<button data-i="${i}"><b>${'ABC'[i]}</b><span>${glosar(escH(o.txt), lg)}</span></button>`).join('') + '</div><div id="retorno"></div>';
   $('cRel').innerHTML = '';
   $('cOuvir').hidden = true; $('cVoltar').textContent = tr('pVoltarSem');
   if(K.percurso){ $('cVoltar').hidden = true; $('cSair').hidden = false; $('cSair').textContent = tr('qRever'); modoCartao = 'pergunta'; }
@@ -3479,7 +3496,7 @@ function marcar(i, nova){
     if(K.percurso && leitura && leitura.ch === ch){ const r = respostas[ch]; r.tl = Math.round(leitura.tl/1000); r.tq = Math.round((performance.now() - leitura.q0)/1000); r.rep = leitura.rep; r.rev = leitura.rev; r.nl = leitura.lgs.size; r.l = leitura.lg; r.ouv = leitura.ouv || 0; leitura = null; }
     pendente = { mi, ti }; guardar(); somResposta(ok); }
   $('cVoltar').textContent = tr('pContinuar');
-  if(K.percurso){ $('cVoltar').hidden = false; $('cSair').hidden = true; modoCartao = 'fim'; ret.textContent = ok ? tr('qCerto') : tr('qErrado', termoEm(mi, ti, lingua || 'pt')[1]); if(nova && typeof mostrarSugestao === 'function') mostrarSugestao(mi, ti); }
+  if(K.percurso){ $('cVoltar').hidden = false; $('cSair').hidden = true; modoCartao = 'fim'; ret.innerHTML = ok ? escH(tr('qCerto')) : glosar(escH(tr('qErrado', termoEm(mi, ti, lingua || 'pt')[1])), lingua || 'pt'); if(nova && typeof mostrarSugestao === 'function') mostrarSugestao(mi, ti); }
 }
 $('cViz').addEventListener('click', e => { if(!(K.prova || K.percurso) || !opcoesAtuais || modoCartao === 'leitura') return; const b = e.target.closest('.opcoes button'); if(!b || b.disabled) return; marcar(+b.dataset.i, true); });
 function somResposta(ok){
@@ -4047,8 +4064,8 @@ let opAtual = null, tOp = 0;
 function abrirOperador(op){
   if(cartaoAberto || verbalAberto) return;
   const T = opT(), outro = op === 'uniao' ? 'inter' : 'uniao'; opAtual = op; modalAberto = true; rodape.classList.add('parada');
-  $('opSimb').textContent = op === 'uniao' ? '∪' : '∩'; $('opNome').textContent = T.nome[op]; $('opTexto').textContent = T.texto[op];
-  $('opCtx').textContent = T.ctx[op]; $('opTruque').textContent = T.truque; $('opMergulhar').textContent = T.mergulhar; $('opOutro').textContent = T.nome[outro];
+  $('opSimb').textContent = op === 'uniao' ? '∪' : '∩'; $('opNome').textContent = T.nome[op]; $('opTexto').innerHTML = glosar(escH(T.texto[op]), lingua || 'pt');
+  $('opCtx').innerHTML = glosar(escH(T.ctx[op]), lingua || 'pt'); $('opTruque').textContent = T.truque; $('opMergulhar').textContent = T.mergulhar; $('opOutro').textContent = T.nome[outro];
   opFolha.dir = LANGS[lingua || 'pt'].rtl ? 'rtl' : 'ltr'; opFolha.lang = LANGS[lingua || 'pt'].bcp;
   montarViz($('opViz'), op === 'uniao' ? 'vo_uniao' : 'vo_inter'); const bt = $('opViz').querySelector('.repetir'); if(bt) bt.textContent = tr('repetir');
   opFolha.classList.add('aberta'); say(T.nome[op] + '. ' + T.texto[op], null, false, lingua || 'pt');
@@ -4087,6 +4104,56 @@ function mostrarSugestao(mi, ti){
     fecharCartao();
     setTimeout(() => { if(fase !== 'lex' || modAtual !== s.mi) entrarLexico(s.mi, () => abrirPalavra(s.mi, s.ti, lg)); else abrirPalavra(s.mi, s.ti, lg); }, 650); };
 }
+
+/* =====================================================================
+   GLOSAS: cada símbolo é seguido, na primeira vez em cada texto, de uma
+   explicação em linguagem corrente, entre parênteses, a azul.
+   REFORÇO: quando o aluno pede para repetir, o texto ganha peso e tamanho
+   e a imagem recua no quadro da explicação.
+   ===================================================================== */
+const GLOSAS = {
+pt:{ '∪':'reunião: «ou», junta tudo', '∩':'interseção: «e», só o que é comum', '\\':'sem: tira-se o que está no segundo', '|':'sabendo que', '∅':'conjunto vazio: nada', 'Ω':'todos os resultados possíveis',
+  '‾':'o contrário de', 'barra':'o contrário de', '⊂':'está dentro de', '≤':'menor ou igual a', '≥':'maior ou igual a', '≠':'diferente de', '#':'número de elementos de', '×':'vezes', ' / ':'a dividir por', '!':'fatorial: multiplicar até 1', 'P(':'probabilidade de' },
+en:{ '∪':'union: «or», everything together', '∩':'intersection: «and», only what is shared', '\\':'without: take away what is in the second', '|':'given that', '∅':'empty set: nothing', 'Ω':'all possible outcomes',
+  '‾':'the opposite of', 'barra':'the opposite of', '⊂':'is inside', '≤':'less than or equal to', '≥':'greater than or equal to', '≠':'different from', '#':'number of elements of', '×':'times', ' / ':'divided by', '!':'factorial: multiply down to 1', 'P(':'probability of' },
+es:{ '∪':'unión: «o», lo junta todo', '∩':'intersección: «y», solo lo común', '\\':'sin: se quita lo que está en el segundo', '|':'sabiendo que', '∅':'conjunto vacío: nada', 'Ω':'todos los resultados posibles',
+  '‾':'lo contrario de', 'barra':'lo contrario de', '⊂':'está dentro de', '≤':'menor o igual que', '≥':'mayor o igual que', '≠':'distinto de', '#':'número de elementos de', '×':'por', ' / ':'dividido entre', '!':'factorial: multiplicar hasta 1', 'P(':'probabilidad de' },
+hi:{ '∪':'सम्मिलन: «या», सब मिलाकर', '∩':'सर्वनिष्ठ: «और», केवल साझा', '\\':'बिना: दूसरे वाला हटा दें', '|':'दिया होने पर', '∅':'रिक्त समुच्चय: कुछ नहीं', 'Ω':'सभी संभावित परिणाम',
+  '‾':'का उल्टा', 'barra':'का उल्टा', '⊂':'के अंदर है', '≤':'से कम या बराबर', '≥':'से अधिक या बराबर', '≠':'से भिन्न', '#':'के अवयवों की संख्या', '×':'गुणा', ' / ':'से भाग', '!':'क्रमगुणित: 1 तक गुणा', 'P(':'की प्रायिकता' },
+fr:{ '∪':'réunion : « ou », tout ensemble', '∩':'intersection : « et », seulement ce qui est commun', '\\':'sans : on enlève ce qui est dans le second', '|':'sachant que', '∅':'ensemble vide : rien', 'Ω':'toutes les issues possibles',
+  '‾':'le contraire de', 'barra':'le contraire de', '⊂':'est dans', '≤':'inférieur ou égal à', '≥':'supérieur ou égal à', '≠':'différent de', '#':'nombre d’éléments de', '×':'fois', ' / ':'divisé par', '!':'factorielle : multiplier jusqu’à 1', 'P(':'probabilité de' },
+ar:{ '∪':'اتحاد: «أو»، كل شي سوا', '∩':'تقاطع: «و»، بس المشترك', '\\':'بدون: منشيل يلّي بالتاني', '|':'علماً إنّو', '∅':'مجموعة فاضية: ولا شي', 'Ω':'كل النتائج الممكنة',
+  '‾':'عكس', 'barra':'عكس', '⊂':'جوّا', '≤':'أصغر أو بيساوي', '≥':'أكبر أو بيساوي', '≠':'مش متل', '#':'عدد عناصر', '×':'ضرب', ' / ':'مقسوم على', '!':'عاملي: نضرب لحد 1', 'P(':'احتمال' }
+};
+/* recebe texto já escapado; devolve HTML com as glosas a seguir ao primeiro uso de cada símbolo */
+function glosar(html, lg){
+  if(LANGS[lg] && LANGS[lg].rtl) return glosarRTL(html, lg);
+  const G = GLOSAS[lg] || GLOSAS.pt, vistos = new Set();
+  const g = (chave, simb) => { if(vistos.has(chave)) return simb; vistos.add(chave); return `${simb}<span class="glosa" dir="auto">(${G[chave]})</span>`; };
+  return html
+    .replace(/(\([^()]*\))‾/g, (m, a) => g('‾', m))
+    .replace(/Ā|[A-Z]̄/g, m => g('barra', m))
+    .replace(/P\((?:[^()]|\([^()]*\))*\)/g, m => g('P(', m))
+    .replace(/[∪∩∅Ω⊂≤≥≠×]/g, m => g(m, m))
+    .replace(/ \\ /g, m => g('\\', m))
+    .replace(/([A-Za-zΩ6])\|([A-Za-zΩ֐-ࣿऀ-ॿÀ-ɏ])/g, (m, a, b) => a + g('|', '|') + b)
+    .replace(/(^|[\s(])#(?=[A-ZΩ])/g, (m, a) => a + g('#', '#'))
+    .replace(/ \/ /g, m => g(' / ', m))
+    .replace(/(\d)!/g, (m, a) => a + g('!', '!'));
+}
+/* em árabe, cada fórmula fica isolada da esquerda para a direita e as glosas vêm logo a seguir, juntas */
+function glosarRTL(html, lg){
+  const G = GLOSAS[lg] || GLOSAS.pt, vistos = new Set();
+  const testes = [['P(', /P\(/], ['∪', /∪/], ['∩', /∩/], ['∅', /∅/], ['Ω', /Ω/], ['⊂', /⊂/], ['≤', /≤/], ['≥', /≥/], ['≠', /≠/], ['×', /×/], ['\\', / \\ /], ['|', /[A-Za-z0-9]\|/], ['‾', /‾|Ā|[A-Z]̄/], ['#', /#[A-ZΩ]/], [' / ', / \/ /]];
+  return html.replace(/[A-Za-z0-9ΩĀ(][A-Za-z0-9ΩĀ()|∪∩∅⊂≤≥≠×=+\-−\/\\.,‾̄ ]*[A-Za-z0-9ΩĀ)‾̄]/g, run => {
+    if(!/[()|∪∩∅⊂≤≥≠×=Ω\\#‾̄Ā]/.test(run)) return run;
+    const gl = testes.filter(([k, re]) => re.test(run) && !vistos.has(k)).map(([k]) => { vistos.add(k); return G[k]; });
+    return `<span dir="ltr" class="formula">${run}</span>` + (gl.length ? ` <span class="glosa" dir="rtl">(${gl.join('؛ ')})</span>` : '');
+  });
+}
+/* reforço: 0, 1 ou 2, conforme os pedidos de repetição deste termo */
+function nivelReforco(mi, ti){ if(typeof leituras === 'undefined') return 0; const L = leituras[chaveT(mi, ti)]; if(!L) return 0; return Math.min(2, (L.rep || 0) + (L.ouv || 0) + (L.rev || 0)); }
+function aplicarReforco(n){ const c = $('cartao'), antes = +(c.dataset.reforco || 0); c.dataset.reforco = n; if(n > antes){ c.classList.remove('reforcou'); void c.offsetWidth; c.classList.add('reforcou'); } }
 
 /* ---------- arranque ---------- */
 montar();
